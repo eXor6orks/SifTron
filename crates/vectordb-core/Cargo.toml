@@ -8,6 +8,7 @@ repository.workspace = true
 description = "Core traits and exact baseline index for SifTron vector database"
 
 [dependencies]
+serde_json.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true
