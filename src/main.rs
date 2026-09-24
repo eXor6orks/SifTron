@@ -2,8 +2,18 @@
 //! This is a throwaway playground, not the future `vectordb-server` (v0.7.0)
 //! API/CLI described in the engineering plan.
 //!
-//! Run with: `cargo run -- <dimension> <metric>`
-//! `<metric>` is one of `l2`, `cosine`, `dot` (default: `cosine`).
+//! ============================================================
+//!  HOW TO RUN (from the repository root):
+//!
+//!      cargo run -- <dimension> <metric>
+//!
+//!  Example:
+//!      cargo run -- 3 cosine
+//!
+//!  <metric> is one of `l2`, `cosine`, `dot`. Both arguments are
+//!  optional — with no args at all, it defaults to dimension=3,
+//!  metric=cosine (so the IDE's plain "Run" button also works).
+//! ============================================================
 
 use std::io::{self, BufRead, Write};
 
@@ -42,9 +52,8 @@ fn main() {
     let mut args = std::env::args().skip(1);
     let dimension: usize = args
         .next()
-        .expect("usage: playground <dimension> [metric]")
-        .parse()
-        .expect("dimension must be a positive integer");
+        .map(|s| s.parse().expect("dimension must be a positive integer"))
+        .unwrap_or(3);
     let metric = args
         .next()
         .map(|s| parse_metric(&s).unwrap_or_else(|| panic!("unknown metric '{s}'")))
