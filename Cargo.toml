@@ -11,3 +11,19 @@ repository = "https://github.com/eXor6orks/SifTron"
 
 [workspace.dependencies]
 proptest = "1"
+
+[package]
+name = "siftron"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "SifTron CLI entry point — interactive playground for the vector index"
+
+[[bin]]
+name = "siftron"
+path = "src/main.rs"
+
+[dependencies]
+vectordb-core = { path = "crates/vectordb-core" }

@@ -24,10 +24,32 @@ cargo test --workspace
 MSRV: 1.96.0 (pinned in CI; `cargo build` with an older toolchain is not
 supported).
 
+## Trying it out
+
+The root `siftron` binary is a REPL for hand-testing `FlatIndex` without
+writing Rust — a throwaway playground, not the future `vectordb-server`
+(v0.7.0) API/CLI:
+
+```sh
+cargo run -- <dimension> <metric>   # metric: l2 | cosine | dot (default: cosine)
+```
+
+Then, at the `>` prompt:
+
+```
+> add 1 1,0,0
+> add 2 0,1,0
+> search 1 1,0,0
+> remove 2
+> len
+> quit
+```
+
 ## Layout
 
 | Crate | Role |
 | --- | --- |
+| `siftron` (root) | Interactive playground binary (`src/main.rs`) |
 | `vectordb-core` | `Distance`, `IndexStrategy`, `Record`/`Hit`, `FlatIndex` |
 
 Future crates (`vectordb-quantize`, `vectordb-storage`, `vectordb-filter`,
