@@ -12,6 +12,7 @@ repository = "https://github.com/eXor6orks/SifTron"
 [workspace.dependencies]
 proptest = "1"
 serde_json = "1"
+rand = "0.9"
 
 [package]
 name = "siftron"
