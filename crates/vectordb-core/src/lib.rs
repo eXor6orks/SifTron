@@ -9,6 +9,7 @@ mod index;
 mod kmeans;
 mod record;
 mod ivf;
+mod hnsw;
 
 pub use distance::{Cosine, Distance, DotProduct, Metric, L2};
 pub use flat::FlatIndex;
@@ -16,3 +17,4 @@ pub use index::IndexStrategy;
 pub use kmeans::{kmeans, KMeansResult};
 pub use record::{Hit, Record};
 pub use ivf::IvfIndex;
+pub use hnsw::HnswIndex;
