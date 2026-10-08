@@ -13,3 +13,7 @@ rand.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true
+
+[[bench]]
+name = "compare"
+harness = false

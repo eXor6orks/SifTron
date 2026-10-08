@@ -119,6 +119,41 @@ impl HnswIndex {
         results
     }
 
+    fn select_neighbors(&self, candidates: &[(usize, f32)], max: usize) -> Vec<usize> {
+        let mut selected: Vec<(usize, f32)> = Vec::new();
+        let mut rejected: Vec<usize> = Vec::new();
+
+        for &(index, dist_to_base) in candidates {
+            if selected.len() >= max {
+                break;
+            }
+            let points_in_new_direction = selected.iter().all(|&(kept, _)| {
+                self.metric
+                    .distance(&self.nodes[index].vector, &self.nodes[kept].vector)
+                    > dist_to_base
+            });
+            if points_in_new_direction {
+                selected.push((index, dist_to_base));
+            } else {
+                rejected.push(index);
+            }
+        }
+
+        let mut result: Vec<usize> = selected.into_iter().map(|(index, _)| index).collect();
+        for index in rejected {
+            if result.len() >= max {
+                break;
+            }
+            result.push(index);
+        }
+        result
+    }
+
+    pub fn set_ef_search(&mut self, ef_search: usize) {
+        assert!(ef_search > 0, "ef_search must be at least 1");
+        self.ef_search = ef_search;
+    }
+
     fn max_connections(&self, layer: usize) -> usize {
         if layer == 0 { 2 * self.m } else { self.m }
     }
@@ -177,14 +212,14 @@ impl IndexStrategy for HnswIndex {
                 self.search_layer(&record.vector, &entry_points, self.ef_construction, layer);
             let max_conn = self.max_connections(layer);
 
-            // b. keep the `m` closest that are not tombstoned
+            // b. choose m neighbours with the diversity heuristic (tombstoned nodes excluded)
             //    (`candidates` is sorted closest-first)
-            let neighbors: Vec<usize> = candidates
+            let alive: Vec<(usize, f32)> = candidates
                 .iter()
-                .map(|&(index, _)| index)
-                .filter(|&index| !self.nodes[index].deleted)
-                .take(self.m)
+                .copied()
+                .filter(|&(index, _)| !self.nodes[index].deleted)
                 .collect();
+            let neighbors = self.select_neighbors(&alive, self.m);
 
             // c. connect in both directions
             self.nodes[new_index].layers[layer] = neighbors.clone();
@@ -207,9 +242,8 @@ impl IndexStrategy for HnswIndex {
                         })
                         .collect();
                     scored.sort_by(|a, b| a.1.total_cmp(&b.1).then(a.0.cmp(&b.0)));
-                    scored.truncate(max_conn);
-                    self.nodes[n].layers[layer] =
-                        scored.into_iter().map(|(other, _)| other).collect();
+                    let pruned = self.select_neighbors(&scored, max_conn);
+                    self.nodes[n].layers[layer] = pruned;
                 }
             }
 
@@ -312,6 +346,30 @@ mod tests {
     // ---------------------------------------------------------------
     // upsert / remove
     // ---------------------------------------------------------------
+    #[test]
+    fn recall_stays_high_on_clustered_data() {
+        let mut rng = StdRng::seed_from_u64(5);
+        let (n, clusters, dim) = (2000, 40, 32);
+        let centres = random_vectors(&mut rng, clusters, dim);
+        let points: Vec<Vec<f32>> = (0..n + 100)
+            .map(|_| {
+                let c = &centres[rng.random_range(0..clusters)];
+                c.iter().map(|x| x + rng.random_range(-8.0..8.0)).collect()
+            })
+            .collect();
+        let (stored, queries) = points.split_at(n);
+
+        let mut idx = HnswIndex::new(dim, Metric::L2, 8, 100, 50);
+        let mut flat = FlatIndex::new(dim, Metric::L2);
+        for (id, v) in stored.iter().enumerate() {
+            idx.upsert(Record::new(id as u64, v.clone()));
+            flat.upsert(Record::new(id as u64, v.clone()));
+        }
+        let recall = recall_at_k(&idx, &flat, queries, 10);
+        println!("clustered data, ef_search = 50 -> recall@10 = {recall:.3}");
+        assert!(recall >= 0.95, "recall@10 on clustered data was only {recall:.3}");
+    }
+
 
     #[test]
     fn first_insert_becomes_entry_point() {

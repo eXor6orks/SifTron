@@ -71,6 +71,11 @@ impl IvfIndex {
         !self.centroids.is_empty()
     }
 
+    pub fn set_nprobe(&mut self, nprobe: usize) {
+        assert!(nprobe > 0, "nprobe must be at least 1");
+        self.nprobe = nprobe;
+    }
+
     /// Runs k-means once on everything accumulated in `pending`, then
     /// empties it into `clusters`. Called automatically by `upsert` the
     /// moment `pending` reaches `train_threshold` — see the state machine
