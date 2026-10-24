@@ -10,7 +10,7 @@ use std::time::Instant;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 
-use vectordb_core::{FlatIndex, HnswIndex, IndexStrategy, IvfIndex, Metric, Record};
+use vectordb_core::{FlatIndex, HnswIndex, IndexStrategy, IvfIndex, FlatSq8Index, Metric, Record};
 
 const N: usize = 10_000; // vectors stored in each index
 const DIM: usize = 64;
@@ -88,6 +88,14 @@ fn main() {
     }
     println!("build  IVF : {:>7.2}s (nlist = {nlist})", t.elapsed().as_secs_f64());
 
+    // ---- SQ8: built here, measured later (once flat_qps exists) ----
+    let t = Instant::now();
+    let mut sq8 = FlatSq8Index::new(DIM, Metric::L2, N);
+    for (id, v) in stored.iter().enumerate() {
+        sq8.upsert(Record::new(id as u64, v.clone()));
+    }
+    println!("build  SQ8 : {:>7.2}s (train_threshold = {N})", t.elapsed().as_secs_f64());
+
     // ---- HNSW ----
     let t = Instant::now();
     let mut hnsw = HnswIndex::new(DIM, Metric::L2, 16, 200, 10);
@@ -102,6 +110,9 @@ fn main() {
     let (r, flat_qps) = measure(&flat, &queries, &truth);
     row("Flat", "-", r, flat_qps, flat_qps);
 
+    let (r, qps) = measure(&sq8, &queries, &truth);
+    row("SQ8", "-", r, qps, flat_qps);
+
     for nprobe in [1, 2, 4, 8, 16, 32] {
         ivf.set_nprobe(nprobe);
         let (r, qps) = measure(&ivf, &queries, &truth);
@@ -113,4 +124,6 @@ fn main() {
         let (r, qps) = measure(&hnsw, &queries, &truth);
         row("HNSW", &format!("ef_search={ef}"), r, qps, flat_qps);
     }
+
+    println!("\nvectors memory: Flat {} KB, SQ8 {} KB", N * DIM * 4 / 1024, N * DIM / 1024);
 }
