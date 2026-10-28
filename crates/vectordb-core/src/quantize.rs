@@ -52,7 +52,29 @@ impl ScalarQuantizer {
     }
 
     pub fn distance(&self, metric: &Metric, query: &[f32], code: &[u8]) -> f32 {
-        metric.distance(query, &self.decode(code))
+        match metric {
+            Metric::L2 => {
+                // Hot path: this runs once per stored vector, for every
+                // query. Decoding into a fresh `Vec` here meant one heap
+                // allocation per comparison, so for L2 we compute the
+                // distance directly from the codes instead.
+                assert_eq!(query.len(), self.mins.len(), "query dimension does not match the quantizer");
+                assert_eq!(code.len(), self.mins.len(), "code dimension does not match the quantizer");
+                let mut sum = 0.0f32;
+                for i in 0..code.len() {
+                    // same arithmetic as `decode` followed by `L2::distance`,
+                    // in the same order, so the result is identical
+                    let decoded = self.mins[i] + code[i] as f32 * self.scales[i];
+                    let diff = query[i] - decoded;
+                    sum += diff * diff;
+                }
+                sum
+            }
+            // Cosine and Dot keep the generic path (decode, then the
+            // project's own metric): same edge-case behaviour as FlatIndex,
+            // e.g. Cosine of a zero vector.
+            _ => metric.distance(query, &self.decode(code)),
+        }
     }
 }
 
@@ -169,6 +191,26 @@ mod tests {
                 for i in 0..4 {
                     prop_assert!((back[i] - v[i]).abs() <= q.scales[i] / 2.0 + 1e-3);
                 }
+            }
+        }
+    }
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(64))]
+
+        // The optimised L2 path must give exactly what the generic path
+        // (decode, then the project's metric) gives, whatever the data.
+        #[test]
+        fn direct_l2_matches_decode_then_metric(
+            vectors in prop::collection::vec(prop::collection::vec(-100.0f32..100.0, 5), 2..20),
+            query in prop::collection::vec(-150.0f32..150.0, 5),
+        ) {
+            let q = ScalarQuantizer::train(&vectors);
+            for v in &vectors {
+                let code = q.encode(v);
+                let direct = q.distance(&Metric::L2, &query, &code);
+                let generic = Metric::L2.distance(&query, &q.decode(&code));
+                prop_assert_eq!(direct, generic);
             }
         }
     }
